@@ -15,6 +15,8 @@ require (
 	github.com/jmcvetta/randutil v0.0.0-20150817122601-2bb1b664bcff
 	github.com/mitchellh/mapstructure v1.4.1
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
+	github.com/r3labs/sse/v2 v2.3.2
 	github.com/sasha-s/go-deadlock v0.2.0
+	github.com/soheilhy/cmux v0.1.5
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
 )

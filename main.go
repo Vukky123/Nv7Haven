@@ -3,14 +3,15 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"log"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime/debug"
 	"syscall"
 
-	"github.com/Nv7-Github/Nv7Haven/discord"
 	"github.com/Nv7-Github/Nv7Haven/elemental"
-	"github.com/Nv7-Github/Nv7Haven/eod"
 	"github.com/Nv7-Github/Nv7Haven/nv7haven"
 	"github.com/Nv7-Github/Nv7Haven/single"
 
@@ -22,6 +23,9 @@ import (
 	_ "embed"
 
 	_ "github.com/go-sql-driver/mysql" // mysql
+
+	"github.com/r3labs/sse/v2"
+	"github.com/soheilhy/cmux"
 )
 
 const (
@@ -40,7 +44,7 @@ func main() {
 	syscall.Dup2(int(logFile.Fd()), 2)
 
 	// Error logging
-	defer recoverer()
+	//defer recoverer()
 
 	app := fiber.New(fiber.Config{
 		BodyLimit: 1000000000,
@@ -69,6 +73,8 @@ func main() {
 
 	//mysqlsetup.Mysqlsetup()
 
+	sseServer := sse.New()
+
 	e, err := elemental.InitElemental(app, db)
 	if err != nil {
 		panic(err)
@@ -80,8 +86,8 @@ func main() {
 	}
 
 	single.InitSingle(app, db)
-	b := discord.InitDiscord(db, e)
-	eod := eod.InitEoD(db)
+	//b := discord.InitDiscord(db, e)
+	//eod := eod.InitEoD(db)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -91,12 +97,35 @@ func main() {
 		app.Shutdown()
 	}()
 
-	if err := app.Listen(":" + os.Getenv("PORT")); err != nil {
-		panic(err)
+	// Set up cmux
+	l, err := net.Listen("tcp", ":"+os.Getenv("PORT"))
+	if err != nil {
+		log.Fatal(err)
 	}
 
+	mux := cmux.New(l)
+	sseL := mux.Match(cmux.HTTP1HeaderField("Accept", "text/event-stream"))
+	appL := mux.Match(cmux.Any())
+
+	go func() {
+		if err := app.Listener(appL); err != nil {
+			panic(err)
+		}
+	}()
+	go func() {
+		httpS := &http.Server{
+			Handler: NewSseServer(sseServer),
+		}
+		defer httpS.Close()
+		if err := httpS.Serve(sseL); err != nil {
+			panic(err)
+		}
+	}()
+
+	mux.Serve()
+
 	e.Close()
-	b.Close()
-	eod.Close()
+	/*b.Close()
+	eod.Close()*/
 	db.Close()
 }
